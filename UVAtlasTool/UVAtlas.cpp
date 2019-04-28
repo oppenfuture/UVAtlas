@@ -296,7 +296,7 @@ namespace
 
         wprintf(L"Usage: uvatlas <options> <files>\n");
         wprintf(L"\n");
-        wprintf(L"   Input file type must be Wavefront OBJ\n\n");
+        wprintf(L"   Input file type must be PLY\n\n");
         wprintf(L"   Output file type:\n");
         wprintf(L"       -sdkmesh        DirectX SDK .sdkmesh format (default)\n");
         wprintf(L"       -sdkmesh2       .sdkmesh format version 2 (PBR materials)\n");
@@ -362,7 +362,7 @@ namespace
     }
 }
 
-extern HRESULT LoadFromOBJ(const wchar_t* szFilename, std::unique_ptr<Mesh>& inMesh, std::vector<Mesh::Material>& inMaterial, bool ccw, bool dds);
+extern HRESULT LoadFromPLY(const wchar_t* szFilename, std::unique_ptr<Mesh>& inMesh, std::vector<Mesh::Material>& inMaterial, bool ccw, bool dds);
 
 //--------------------------------------------------------------------------------------
 // Entry-point
@@ -743,7 +743,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
         }
         else
         {
-            hr = LoadFromOBJ(pConv->szSrc, inMesh, inMaterial,
+            hr = LoadFromPLY(pConv->szSrc, inMesh, inMaterial,
                 (dwOptions & (1 << OPT_CLOCKWISE)) ? false : true,
                 (dwOptions & (1 << OPT_NODDS)) ? false : true);
         }

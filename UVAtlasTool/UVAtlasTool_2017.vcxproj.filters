@@ -16,6 +16,7 @@
     <ClCompile Include="MeshOBJ.cpp">
       <Filter>Wavefront OBJ</Filter>
     </ClCompile>
+    <ClCompile Include="MeshPLY.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\DirectXMesh\Utilities\WaveFrontReader.h">
