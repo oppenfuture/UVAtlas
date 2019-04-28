@@ -146,6 +146,7 @@ public:
     HRESULT ExportToVBO(_In_z_ const wchar_t* szFileName) const;
     HRESULT ExportToCMO(_In_z_ const wchar_t* szFileName, _In_ size_t nMaterials, _In_reads_opt_(nMaterials) const Material* materials) const;
     HRESULT ExportToSDKMESH(_In_z_ const wchar_t* szFileName, _In_ size_t nMaterials, _In_reads_opt_(nMaterials) const Material* materials, bool force32bit = false, bool version2 = false) const;
+    HRESULT ExportToPLY(_In_z_ const wchar_t* szFileName) const;
 
     // Create mesh from file
     static HRESULT CreateFromVBO(_In_z_ const wchar_t* szFileName, _Inout_ std::unique_ptr<Mesh>& result);
