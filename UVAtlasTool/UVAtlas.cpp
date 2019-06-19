@@ -71,6 +71,7 @@ enum OPTIONS
     OPT_SDKMESH_V2,
     OPT_CMO,
     OPT_VBO,
+    OPT_PLY,
     OPT_OUTPUTFILE,
     OPT_CLOCKWISE,
     OPT_FORCE_32BIT_IB,
@@ -147,6 +148,7 @@ const SValue g_pOptions [] =
     { L"sdkmesh2",  OPT_SDKMESH_V2 },
     { L"cmo",       OPT_CMO },
     { L"vbo",       OPT_VBO },
+    { L"ply",       OPT_PLY },
     { L"cw",        OPT_CLOCKWISE },
     { L"ib32",      OPT_FORCE_32BIT_IB },
     { L"y",         OPT_OVERWRITE },
@@ -294,12 +296,13 @@ namespace
 
         wprintf(L"Usage: uvatlas <options> <files>\n");
         wprintf(L"\n");
-        wprintf(L"   Input file type must be Wavefront OBJ\n\n");
+        wprintf(L"   Input file type must be PLY\n\n");
         wprintf(L"   Output file type:\n");
         wprintf(L"       -sdkmesh        DirectX SDK .sdkmesh format (default)\n");
         wprintf(L"       -sdkmesh2       .sdkmesh format version 2 (PBR materials)\n");
         wprintf(L"       -cmo            Visual Studio Content Pipeline .cmo format\n");
-        wprintf(L"       -vbo            Vertex Buffer Object (.vbo) format\n\n");
+        wprintf(L"       -vbo            Vertex Buffer Object (.vbo) format\n");
+        wprintf(L"       -ply            Polygon File Fromat (.ply) format\n\n");
         wprintf(L"   -r                  wildcard filename search is recursive\n");
         wprintf(L"   -q <level>          sets quality level to DEFAULT, FAST or QUALITY\n");
         wprintf(L"   -n <number>         maximum number of charts to generate (def: 0)\n");
@@ -359,7 +362,7 @@ namespace
     }
 }
 
-extern HRESULT LoadFromOBJ(const wchar_t* szFilename, std::unique_ptr<Mesh>& inMesh, std::vector<Mesh::Material>& inMaterial, bool ccw, bool dds);
+extern HRESULT LoadFromPLY(const wchar_t* szFilename, std::unique_ptr<Mesh>& inMesh, std::vector<Mesh::Material>& inMaterial, bool ccw, bool dds);
 
 //--------------------------------------------------------------------------------------
 // Entry-point
@@ -586,9 +589,9 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
             case OPT_SDKMESH:
             case OPT_SDKMESH_V2:
-                if (dwOptions & ((DWORD64(1) << OPT_VBO) | (DWORD64(1) << OPT_CMO)))
+                if (dwOptions & ((DWORD64(1) << OPT_VBO) | (DWORD64(1) << OPT_CMO) | (DWORD64(1) << OPT_PLY)))
                 {
-                    wprintf(L"Can only use one of sdkmesh, cmo, or vbo\n");
+                    wprintf(L"Can only use one of sdkmesh, cmo, vbo or ply\n");
                     return 1;
                 }
                 if (dwOption == OPT_SDKMESH_V2)
@@ -598,17 +601,25 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 break;
 
             case OPT_CMO:
-                if (dwOptions & ((DWORD64(1) << OPT_VBO) | (DWORD64(1) << OPT_SDKMESH)))
+                if (dwOptions & ((DWORD64(1) << OPT_VBO) | (DWORD64(1) << OPT_SDKMESH) | (DWORD64(1) << OPT_PLY)))
                 {
-                    wprintf(L"Can only use one of sdkmesh, cmo, or vbo\n");
+                    wprintf(L"Can only use one of sdkmesh, cmo, vbo or ply\n");
                     return 1;
                 }
                 break;
 
             case OPT_VBO:
-                if (dwOptions & ((DWORD64(1) << OPT_SDKMESH) | (DWORD64(1) << OPT_CMO)))
+                if (dwOptions & ((DWORD64(1) << OPT_SDKMESH) | (DWORD64(1) << OPT_CMO) | (DWORD64(1) << OPT_PLY)))
                 {
-                    wprintf(L"Can only use one of sdkmesh, cmo, or vbo\n");
+                    wprintf(L"Can only use one of sdkmesh, cmo, vbo or ply\n");
+                    return 1;
+                }
+                break;
+
+            case OPT_PLY:
+                if (dwOption & ((DWORD64(1) << OPT_SDKMESH) | (DWORD64(1) << OPT_CMO) | (DWORD64(1) << OPT_VBO)))
+                {
+                    wprintf(L"Can only use one of sdkmesh, cmo, vbo or ply\n");
                     return 1;
                 }
                 break;
@@ -732,7 +743,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
         }
         else
         {
-            hr = LoadFromOBJ(pConv->szSrc, inMesh, inMaterial,
+            hr = LoadFromPLY(pConv->szSrc, inMesh, inMaterial,
                 (dwOptions & (1 << OPT_CLOCKWISE)) ? false : true,
                 (dwOptions & (1 << OPT_NODDS)) ? false : true);
         }
@@ -1201,6 +1212,10 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
             {
                 wcscpy_s(outputExt, L".cmo");
             }
+            else if (dwOptions & (DWORD64(1) << OPT_PLY))
+            {
+                wcscpy_s(outputExt, L".ply");
+            }
             else
             {
                 wcscpy_s(outputExt, L".sdkmesh");
@@ -1260,6 +1275,10 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
             }
 
             hr = inMesh->ExportToCMO(outputPath, inMaterial.size(), inMaterial.empty() ? nullptr : inMaterial.data());
+        }
+        else if (!_wcsicmp(outputExt, L".ply"))
+        {
+            hr = inMesh->ExportToPLY(outputPath);
         }
         else if (!_wcsicmp(outputExt, L".x"))
         {
