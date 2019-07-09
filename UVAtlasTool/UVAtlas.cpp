@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <conio.h>
+#include <sys/stat.h>
 
 #include <fstream>
 #include <memory>
@@ -32,8 +32,8 @@
 
 #include <dxgiformat.h>
 
-#include "uvatlas.h"
-#include "directxtex.h"
+#include "UVAtlas.h"
+// #include <DirectXTex.h>
 
 #include "Mesh.h"
 
@@ -98,12 +98,12 @@ enum CHANNELS
 
 struct SConversion
 {
-    wchar_t szSrc[MAX_PATH];
+    char szSrc[MAX_PATH];
 };
 
 struct SValue
 {
-    LPCWSTR pName;
+    const char *pName;
     DWORD dwValue;
 };
 
@@ -125,40 +125,40 @@ static const XMFLOAT3 g_ColorList[8] =
 
 const SValue g_pOptions [] =
 {
-    { L"r",         OPT_RECURSIVE },
-    { L"q",         OPT_QUALITY },
-    { L"n",         OPT_MAXCHARTS },
-    { L"st",        OPT_MAXSTRETCH },
-    { L"g",         OPT_GUTTER },
-    { L"w",         OPT_WIDTH },
-    { L"h",         OPT_HEIGHT },
-    { L"ta",        OPT_TOPOLOGICAL_ADJ },
-    { L"ga",        OPT_GEOMETRIC_ADJ },
-    { L"nn",        OPT_NORMALS },
-    { L"na",        OPT_WEIGHT_BY_AREA },
-    { L"ne",        OPT_WEIGHT_BY_EQUAL },
-    { L"tt",        OPT_TANGENTS },
-    { L"tb",        OPT_CTF },
-    { L"c",         OPT_COLOR_MESH },
-    { L"t",         OPT_UV_MESH },
-    { L"it",        OPT_IMT_TEXFILE },
-    { L"iv",        OPT_IMT_VERTEX },
-    { L"o",         OPT_OUTPUTFILE },
-    { L"sdkmesh",   OPT_SDKMESH },
-    { L"sdkmesh2",  OPT_SDKMESH_V2 },
-    { L"cmo",       OPT_CMO },
-    { L"vbo",       OPT_VBO },
-    { L"ply",       OPT_PLY },
-    { L"cw",        OPT_CLOCKWISE },
-    { L"ib32",      OPT_FORCE_32BIT_IB },
-    { L"y",         OPT_OVERWRITE },
-    { L"nodds",     OPT_NODDS },
-    { L"flip",      OPT_FLIP },
-    { L"flipu",     OPT_FLIPU },
-    { L"flipv",     OPT_FLIPV },
-    { L"flipz",     OPT_FLIPZ },
-    { L"nologo",    OPT_NOLOGO },
-    { L"flist",     OPT_FILELIST },
+    { "r",         OPT_RECURSIVE },
+    { "q",         OPT_QUALITY },
+    { "n",         OPT_MAXCHARTS },
+    { "st",        OPT_MAXSTRETCH },
+    { "g",         OPT_GUTTER },
+    { "w",         OPT_WIDTH },
+    { "h",         OPT_HEIGHT },
+    { "ta",        OPT_TOPOLOGICAL_ADJ },
+    { "ga",        OPT_GEOMETRIC_ADJ },
+    { "nn",        OPT_NORMALS },
+    { "na",        OPT_WEIGHT_BY_AREA },
+    { "ne",        OPT_WEIGHT_BY_EQUAL },
+    { "tt",        OPT_TANGENTS },
+    { "tb",        OPT_CTF },
+    { "c",         OPT_COLOR_MESH },
+    { "t",         OPT_UV_MESH },
+    { "it",        OPT_IMT_TEXFILE },
+    { "iv",        OPT_IMT_VERTEX },
+    { "o",         OPT_OUTPUTFILE },
+    { "sdkmesh",   OPT_SDKMESH },
+    { "sdkmesh2",  OPT_SDKMESH_V2 },
+    { "cmo",       OPT_CMO },
+    { "vbo",       OPT_VBO },
+    { "ply",       OPT_PLY },
+    { "cw",        OPT_CLOCKWISE },
+    { "ib32",      OPT_FORCE_32BIT_IB },
+    { "y",         OPT_OVERWRITE },
+    { "nodds",     OPT_NODDS },
+    { "flip",      OPT_FLIP },
+    { "flipu",     OPT_FLIPU },
+    { "flipv",     OPT_FLIPV },
+    { "flipz",     OPT_FLIPZ },
+    { "nologo",    OPT_NOLOGO },
+    { "flist",     OPT_FILELIST },
     { nullptr,      0 }
 };
 
@@ -168,19 +168,14 @@ const SValue g_pOptions [] =
 
 namespace
 {
-    inline HANDLE safe_handle(HANDLE h) { return (h == INVALID_HANDLE_VALUE) ? nullptr : h; }
-
-    struct find_closer { void operator()(HANDLE h) { assert(h != INVALID_HANDLE_VALUE); if (h) FindClose(h); } };
-
-    typedef std::unique_ptr<void, find_closer> ScopedFindHandle;
 
 #pragma prefast(disable : 26018, "Only used with static internal arrays")
 
-    DWORD LookupByName(const wchar_t *pName, const SValue *pArray)
+    DWORD LookupByName(const char *pName, const SValue *pArray)
     {
         while (pArray->pName)
         {
-            if (!_wcsicmp(pName, pArray->pName))
+            if (!std::string(pName).compare(pArray->pName))
                 return pArray->dwValue;
 
             pArray++;
@@ -190,7 +185,7 @@ namespace
     }
 
 
-    const wchar_t* LookupByValue(DWORD pValue, const SValue *pArray)
+    const char* LookupByValue(DWORD pValue, const SValue *pArray)
     {
         while (pArray->pName)
         {
@@ -200,84 +195,8 @@ namespace
             pArray++;
         }
 
-        return L"";
+        return "";
     }
-
-
-    void SearchForFiles(const wchar_t* path, std::list<SConversion>& files, bool recursive)
-    {
-        // Process files
-        WIN32_FIND_DATAW findData = {};
-        ScopedFindHandle hFile(safe_handle(FindFirstFileExW(path,
-            FindExInfoBasic, &findData,
-            FindExSearchNameMatch, nullptr,
-            FIND_FIRST_EX_LARGE_FETCH)));
-        if (hFile)
-        {
-            for (;;)
-            {
-                if (!(findData.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_DIRECTORY)))
-                {
-                    wchar_t drive[_MAX_DRIVE] = {};
-                    wchar_t dir[_MAX_DIR] = {};
-                    _wsplitpath_s(path, drive, _MAX_DRIVE, dir, _MAX_DIR, nullptr, 0, nullptr, 0);
-
-                    SConversion conv;
-                    _wmakepath_s(conv.szSrc, drive, dir, findData.cFileName, nullptr);
-                    files.push_back(conv);
-                }
-
-                if (!FindNextFileW(hFile.get(), &findData))
-                    break;
-            }
-        }
-
-        // Process directories
-        if (recursive)
-        {
-            wchar_t searchDir[MAX_PATH] = {};
-            {
-                wchar_t drive[_MAX_DRIVE] = {};
-                wchar_t dir[_MAX_DIR] = {};
-                _wsplitpath_s(path, drive, _MAX_DRIVE, dir, _MAX_DIR, nullptr, 0, nullptr, 0);
-                _wmakepath_s(searchDir, drive, dir, L"*", nullptr);
-            }
-
-            hFile.reset(safe_handle(FindFirstFileExW(searchDir,
-                FindExInfoBasic, &findData,
-                FindExSearchLimitToDirectories, nullptr,
-                FIND_FIRST_EX_LARGE_FETCH)));
-            if (!hFile)
-                return;
-
-            for (;;)
-            {
-                if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-                {
-                    if (findData.cFileName[0] != L'.')
-                    {
-                        wchar_t subdir[MAX_PATH] = {};
-
-                        {
-                            wchar_t drive[_MAX_DRIVE] = {};
-                            wchar_t dir[_MAX_DIR] = {};
-                            wchar_t fname[_MAX_FNAME] = {};
-                            wchar_t ext[_MAX_FNAME] = {};
-                            _wsplitpath_s(path, drive, dir, fname, ext);
-                            wcscat_s(dir, findData.cFileName);
-                            _wmakepath_s(subdir, drive, dir, fname, ext);
-                        }
-
-                        SearchForFiles(subdir, files, recursive);
-                    }
-                }
-
-                if (!FindNextFileW(hFile.get(), &findData))
-                    break;
-            }
-        }
-    }
-
 
     void PrintLogo()
     {
@@ -298,10 +217,6 @@ namespace
         wprintf(L"\n");
         wprintf(L"   Input file type must be PLY\n\n");
         wprintf(L"   Output file type:\n");
-        wprintf(L"       -sdkmesh        DirectX SDK .sdkmesh format (default)\n");
-        wprintf(L"       -sdkmesh2       .sdkmesh format version 2 (PBR materials)\n");
-        wprintf(L"       -cmo            Visual Studio Content Pipeline .cmo format\n");
-        wprintf(L"       -vbo            Vertex Buffer Object (.vbo) format\n");
         wprintf(L"       -ply            Polygon File Fromat (.ply) format\n\n");
         wprintf(L"   -r                  wildcard filename search is recursive\n");
         wprintf(L"   -q <level>          sets quality level to DEFAULT, FAST or QUALITY\n");
@@ -349,27 +264,18 @@ namespace
             s_lastTick = tick;
         }
 
-        if (_kbhit())
-        {
-            if (_getch() == 27)
-            {
-                wprintf(L"*** ABORT ***");
-                return E_ABORT;
-            }
-        }
-
         return S_OK;
     }
 }
 
-extern HRESULT LoadFromPLY(const wchar_t* szFilename, std::unique_ptr<Mesh>& inMesh, std::vector<Mesh::Material>& inMaterial, bool ccw, bool dds);
+extern HRESULT LoadFromPLY(const char* szFilename, std::unique_ptr<Mesh>& inMesh, std::vector<Mesh::Material>& inMaterial, bool ccw, bool dds);
 
 //--------------------------------------------------------------------------------------
 // Entry-point
 //--------------------------------------------------------------------------------------
 #pragma prefast(disable : 28198, "Command-line tool, frees all memory on exit")
 
-int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
+int main(_In_ int argc, _In_z_count_(argc) char* argv[])
 {
     // Parameters and defaults
     size_t maxCharts = 0;
@@ -380,16 +286,10 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
     CHANNELS perVertex = CHANNEL_NONE;
     DWORD uvOptions = UVATLAS_DEFAULT;
 
-    wchar_t szTexFile[MAX_PATH] = {};
-    wchar_t szOutputFile[MAX_PATH] = {};
+    char szTexFile[MAX_PATH] = {};
+    char szOutputFile[MAX_PATH] = {};
 
-    // Initialize COM (needed for WIC)
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    if (FAILED(hr))
-    {
-        wprintf(L"Failed to initialize COM (%08X)\n", hr);
-        return 1;
-    }
+    HRESULT hr = S_OK;
 
     // Process command line
     DWORD64 dwOptions = 0;
@@ -397,12 +297,12 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
     for (int iArg = 1; iArg < argc; iArg++)
     {
-        PWSTR pArg = argv[iArg];
+        char *pArg = argv[iArg];
 
         if (('-' == pArg[0]) || ('/' == pArg[0]))
         {
             pArg++;
-            PWSTR pValue;
+            char *pValue;
 
             for (pValue = pArg; *pValue && (':' != *pValue); pValue++);
 
@@ -413,7 +313,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
             if (!dwOption || (dwOptions & (DWORD64(1) << dwOption)))
             {
-                wprintf(L"ERROR: unknown command-line option '%ls'\n\n", pArg);
+                wprintf(L"ERROR: unknown command-line option '%s'\n\n", pArg);
                 PrintUsage();
                 return 1;
             }
@@ -437,7 +337,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 {
                     if ((iArg + 1 >= argc))
                     {
-                        wprintf(L"ERROR: missing value for command-line option '%ls'\n\n", pArg);
+                        wprintf(L"ERROR: missing value for command-line option '%s'\n\n", pArg);
                         PrintUsage();
                         return 1;
                     }
@@ -451,64 +351,64 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
             switch (dwOption)
             {
             case OPT_QUALITY:
-                if (!_wcsicmp(pValue, L"DEFAULT"))
+                if (!_stricmp(pValue, "DEFAULT"))
                 {
                     uvOptions = UVATLAS_DEFAULT;
                 }
-                else if (!_wcsicmp(pValue, L"FAST"))
+                else if (!_stricmp(pValue, "FAST"))
                 {
                     uvOptions = UVATLAS_GEODESIC_FAST;
                 }
-                else if (!_wcsicmp(pValue, L"QUALITY"))
+                else if (!_stricmp(pValue, "QUALITY"))
                 {
                     uvOptions = UVATLAS_GEODESIC_QUALITY;
                 }
                 else
                 {
-                    wprintf(L"Invalid value specified with -q (%ls)\n", pValue);
+                    wprintf(L"Invalid value specified with -q (%s)\n", pValue);
                     return 1;
                 }
                 break;
 
             case OPT_MAXCHARTS:
-                if (swscanf_s(pValue, L"%zu", &maxCharts) != 1)
+                if (sscanf(pValue, "%zu", &maxCharts) != 1)
                 {
-                    wprintf(L"Invalid value specified with -n (%ls)\n", pValue);
+                    wprintf(L"Invalid value specified with -n (%s)\n", pValue);
                     return 1;
                 }
                 break;
 
             case OPT_MAXSTRETCH:
-                if (swscanf_s(pValue, L"%f", &maxStretch) != 1
+                if (sscanf(pValue, "%f", &maxStretch) != 1
                     || maxStretch < 0.f
                     || maxStretch > 1.f)
                 {
-                    wprintf(L"Invalid value specified with -st (%ls)\n", pValue);
+                    wprintf(L"Invalid value specified with -st (%s)\n", pValue);
                     return 1;
                 }
                 break;
 
             case OPT_GUTTER:
-                if (swscanf_s(pValue, L"%f", &gutter) != 1
+                if (sscanf(pValue, "%f", &gutter) != 1
                     || gutter < 0.f)
                 {
-                    wprintf(L"Invalid value specified with -g (%ls)\n", pValue);
+                    wprintf(L"Invalid value specified with -g (%s)\n", pValue);
                     return 1;
                 }
                 break;
 
             case OPT_WIDTH:
-                if (swscanf_s(pValue, L"%zu", &width) != 1)
+                if (sscanf(pValue, "%zu", &width) != 1)
                 {
-                    wprintf(L"Invalid value specified with -w (%ls)\n", pValue);
+                    wprintf(L"Invalid value specified with -w (%s)\n", pValue);
                     return 1;
                 }
                 break;
 
             case OPT_HEIGHT:
-                if (swscanf_s(pValue, L"%zu", &height) != 1)
+                if (sscanf(pValue, "%zu", &height) != 1)
                 {
-                    wprintf(L"Invalid value specified with -h (%ls)\n", pValue);
+                    wprintf(L"Invalid value specified with -h (%s)\n", pValue);
                     return 1;
                 }
                 break;
@@ -538,7 +438,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                     return 1;
                 }
 
-                wcscpy_s(szTexFile, MAX_PATH, pValue);
+                strcpy(szTexFile, pValue);
                 break;
 
             case OPT_IMT_VERTEX:
@@ -548,27 +448,27 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                     return 1;
                 }
 
-                if (!_wcsicmp(pValue, L"COLOR"))
+                if (!_stricmp(pValue, "COLOR"))
                 {
                     perVertex = CHANNEL_COLOR;
                 }
-                else if (!_wcsicmp(pValue, L"NORMAL"))
+                else if (!_stricmp(pValue, "NORMAL"))
                 {
                     perVertex = CHANNEL_NORMAL;
                 }
-                else if (!_wcsicmp(pValue, L"TEXCOORD"))
+                else if (!_stricmp(pValue, "TEXCOORD"))
                 {
                     perVertex = CHANNEL_TEXCOORD;
                 }
                 else
                 {
-                    wprintf(L"Invalid value specified with -iv (%ls)\n", pValue);
+                    wprintf(L"Invalid value specified with -iv (%s)\n", pValue);
                     return 1;
                 }
                 break;
 
             case OPT_OUTPUTFILE:
-                wcscpy_s(szOutputFile, MAX_PATH, pValue);
+                strcpy(szOutputFile, pValue);
                 break;
 
             case OPT_TOPOLOGICAL_ADJ:
@@ -626,61 +526,67 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
             case OPT_FILELIST:
                 {
-                    std::wifstream inFile(pValue);
-                    if (!inFile)
-                    {
-                        wprintf(L"Error opening -flist file %ls\n", pValue);
-                        return 1;
-                    }
-                    wchar_t fname[1024] = {};
-                    for (;;)
-                    {
-                        inFile >> fname;
-                        if (!inFile)
-                            break;
+                    wprintf(L"ERROR: unknown command-line option '%s'\n\n", pArg);
+                    PrintUsage();
+                    return 1;
+                    // std::wifstream inFile(pValue);
+                    // if (!inFile)
+                    // {
+                    //     wprintf(L"Error opening -flist file %ls\n", pValue);
+                    //     return 1;
+                    // }
+                    // wchar_t fname[1024] = {};
+                    // for (;;)
+                    // {
+                    //     inFile >> fname;
+                    //     if (!inFile)
+                    //         break;
 
-                        if (*fname == L'#')
-                        {
-                            // Comment
-                        }
-                        else if (*fname == L'-')
-                        {
-                            wprintf(L"Command-line arguments not supported in -flist file\n");
-                            return 1;
-                        }
-                        else if (wcspbrk(fname, L"?*") != nullptr)
-                        {
-                            wprintf(L"Wildcards not supported in -flist file\n");
-                            return 1;
-                        }
-                        else
-                        {
-                            SConversion conv;
-                            wcscpy_s(conv.szSrc, MAX_PATH, fname);
-                            conversion.push_back(conv);
-                        }
+                    //     if (*fname == L'#')
+                    //     {
+                    //         // Comment
+                    //     }
+                    //     else if (*fname == L'-')
+                    //     {
+                    //         wprintf(L"Command-line arguments not supported in -flist file\n");
+                    //         return 1;
+                    //     }
+                    //     else if (wcspbrk(fname, L"?*") != nullptr)
+                    //     {
+                    //         wprintf(L"Wildcards not supported in -flist file\n");
+                    //         return 1;
+                    //     }
+                    //     else
+                    //     {
+                    //         SConversion conv;
+                    //         wcscpy(conv.szSrc, fname);
+                    //         conversion.push_back(conv);
+                    //     }
 
-                        inFile.ignore(1000, '\n');
-                    }
-                    inFile.close();
+                    //     inFile.ignore(1000, '\n');
+                    // }
+                    // inFile.close();
                 }
                 break;
             }
         }
-        else if (wcspbrk(pArg, L"?*") != nullptr)
+        else if (strpbrk(pArg, "?*") != nullptr)
         {
-            size_t count = conversion.size();
-            SearchForFiles(pArg, conversion, (dwOptions & (DWORD64(1) << OPT_RECURSIVE)) != 0);
-            if (conversion.size() <= count)
-            {
-                wprintf(L"No matching files found for %ls\n", pArg);
-                return 1;
-            }
+            wprintf(L"ERROR: unknown command-line option '%s'\n\n", pArg);
+            PrintUsage();
+            return 1;
+            // size_t count = conversion.size();
+            // SearchForFiles(pArg, conversion, (dwOptions & (DWORD64(1) << OPT_RECURSIVE)) != 0);
+            // if (conversion.size() <= count)
+            // {
+            //     wprintf(L"No matching files found for %ls\n", pArg);
+            //     return 1;
+            // }
         }
         else
         {
             SConversion conv;
-            wcscpy_s(conv.szSrc, MAX_PATH, pArg);
+            strcpy(conv.szSrc, pArg);
 
             conversion.push_back(conv);
         }
@@ -704,39 +610,40 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
     // Process files
     for (auto pConv = conversion.begin(); pConv != conversion.end(); ++pConv)
     {
-        wchar_t ext[_MAX_EXT];
-        wchar_t fname[_MAX_FNAME];
-        _wsplitpath_s(pConv->szSrc, nullptr, 0, nullptr, 0, fname, _MAX_FNAME, ext, _MAX_EXT);
+        char ext[_MAX_EXT];
+        char fname[_MAX_FNAME];
+        _splitpath_s(pConv->szSrc, nullptr, 0, nullptr, 0, fname, _MAX_FNAME, ext, _MAX_EXT);
 
         if (pConv != conversion.begin())
             wprintf(L"\n");
 
-        wprintf(L"reading %ls", pConv->szSrc);
+        wprintf(L"reading %s\n", pConv->szSrc);
         fflush(stdout);
 
         std::unique_ptr<Mesh> inMesh;
         std::vector<Mesh::Material> inMaterial;
         hr = E_NOTIMPL;
-        if (_wcsicmp(ext, L".vbo") == 0)
+        if (_stricmp(ext, ".vbo") == 0)
         {
-            hr = Mesh::CreateFromVBO(pConv->szSrc, inMesh);
+            wprintf(L"\nERROR: Importing VBO files not supported\n");
+            return 1;
         }
-        else if (_wcsicmp(ext, L".sdkmesh") == 0)
+        else if (_stricmp(ext, ".sdkmesh") == 0)
         {
             wprintf(L"\nERROR: Importing SDKMESH files not supported\n");
             return 1;
         }
-        else if (_wcsicmp(ext, L".cmo") == 0)
+        else if (_stricmp(ext, ".cmo") == 0)
         {
             wprintf(L"\nERROR: Importing Visual Studio CMO files not supported\n");
             return 1;
         }
-        else if (_wcsicmp(ext, L".x") == 0)
+        else if (_stricmp(ext, ".x") == 0)
         {
             wprintf(L"\nERROR: Legacy Microsoft X files not supported\n");
             return 1;
         }
-        else if (_wcsicmp(ext, L".fbx") == 0)
+        else if (_stricmp(ext, ".fbx") == 0)
         {
             wprintf(L"\nERROR: Autodesk FBX files not supported\n");
             return 1;
@@ -897,83 +804,85 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
         {
             if (dwOptions & (DWORD64(1) << OPT_IMT_TEXFILE))
             {
-                if (!inMesh->GetTexCoordBuffer())
-                {
-                    wprintf(L"\nERROR: Computing IMT from texture requires texture coordinates\n");
-                    return 1;
-                }
+                hr = E_FAIL;
+//                 if (!inMesh->GetTexCoordBuffer())
+//                 {
+//                     wprintf(L"\nERROR: Computing IMT from texture requires texture coordinates\n");
+//                     return 1;
+//                 }
 
-                wchar_t txext[_MAX_EXT];
-                _wsplitpath_s(szTexFile, nullptr, 0, nullptr, 0, nullptr, 0, txext, _MAX_EXT);
+//                 wchar_t txext[_MAX_EXT];
+//                 _wsplitpath_s(szTexFile, nullptr, nullptr, txext);
 
-                ScratchImage iimage;
+//                 ScratchImage iimage;
 
-                if (_wcsicmp(txext, L".dds") == 0)
-                {
-                    hr = LoadFromDDSFile(szTexFile, DDS_FLAGS_NONE, nullptr, iimage);
-                }
-                else if (_wcsicmp(ext, L".tga") == 0)
-                {
-                    hr = LoadFromTGAFile(szTexFile, nullptr, iimage);
-                }
-                else if (_wcsicmp(ext, L".hdr") == 0)
-                {
-                    hr = LoadFromHDRFile(szTexFile, nullptr, iimage);
-                }
-#ifdef USE_OPENEXR
-                else if (_wcsicmp(ext, L".exr") == 0)
-                {
-                    hr = LoadFromEXRFile(szTexFile, nullptr, iimage);
-                }
-#endif
-                else
-                {
-                    hr = LoadFromWICFile(szTexFile, TEX_FILTER_DEFAULT, nullptr, iimage);
-                }
-                if (FAILED(hr))
-                {
-                    wprintf(L"\nWARNING: Failed to load texture for IMT (%08X):\n%ls\n", hr, szTexFile);
-                }
-                else
-                {
-                    const Image* img = iimage.GetImage(0, 0, 0);
+//                 if (_wcsicmp(txext, L".dds") == 0)
+//                 {
+//                     hr = LoadFromDDSFile(szTexFile, DDS_FLAGS_NONE, nullptr, iimage);
+//                 }
+//                 else if (_wcsicmp(ext, L".tga") == 0)
+//                 {
+//                     hr = LoadFromTGAFile(szTexFile, nullptr, iimage);
+//                 }
+//                 else if (_wcsicmp(ext, L".hdr") == 0)
+//                 {
+//                     hr = LoadFromHDRFile(szTexFile, nullptr, iimage);
+//                 }
+// #ifdef USE_OPENEXR
+//                 else if (_wcsicmp(ext, L".exr") == 0)
+//                 {
+//                     hr = LoadFromEXRFile(szTexFile, nullptr, iimage);
+//                 }
+// #endif
+//                 else
+//                 {
+//                     // hr = LoadFromWICFile(szTexFile, TEX_FILTER_DEFAULT, nullptr, iimage);
+//                     hr = E_FAIL;
+//                 }
+//                 if (FAILED(hr))
+//                 {
+//                     wprintf(L"\nWARNING: Failed to load texture for IMT (%08X):\n%ls\n", hr, szTexFile);
+//                 }
+//                 else
+//                 {
+//                     const Image* img = iimage.GetImage(0, 0, 0);
 
-                    ScratchImage floatImage;
-                    if (img->format != DXGI_FORMAT_R32G32B32A32_FLOAT)
-                    {
-                        hr = Convert(*iimage.GetImage(0, 0, 0), DXGI_FORMAT_R32G32B32A32_FLOAT, TEX_FILTER_DEFAULT, TEX_THRESHOLD_DEFAULT, floatImage);
-                        if (FAILED(hr))
-                        {
-                            img = nullptr;
-                            wprintf(L"\nWARNING: Failed converting texture for IMT (%08X):\n%ls\n", hr, szTexFile);
-                        }
-                        else
-                        {
-                            img = floatImage.GetImage(0, 0, 0);
-                        }
-                    }
+//                     ScratchImage floatImage;
+//                     if (img->format != DXGI_FORMAT_R32G32B32A32_FLOAT)
+//                     {
+//                         hr = Convert(*iimage.GetImage(0, 0, 0), DXGI_FORMAT_R32G32B32A32_FLOAT, TEX_FILTER_DEFAULT, TEX_THRESHOLD_DEFAULT, floatImage);
+//                         if (FAILED(hr))
+//                         {
+//                             img = nullptr;
+//                             wprintf(L"\nWARNING: Failed converting texture for IMT (%08X):\n%ls\n", hr, szTexFile);
+//                         }
+//                         else
+//                         {
+//                             img = floatImage.GetImage(0, 0, 0);
+//                         }
+//                     }
 
-                    if (img)
-                    {
-                        wprintf(L"\nComputing IMT from file %ls...\n", szTexFile);
-                        IMTData.reset(new (std::nothrow) float[nFaces * 3]);
-                        if (!IMTData)
-                        {
-                            wprintf(L"\nERROR: out of memory\n");
-                            return 1;
-                        }
+//                     if (img)
+//                     {
+//                         wprintf(L"\nComputing IMT from file %ls...\n", szTexFile);
+//                         IMTData.reset(new (std::nothrow) float[nFaces * 3]);
+//                         if (!IMTData)
+//                         {
+//                             wprintf(L"\nERROR: out of memory\n");
+//                             return 1;
+//                         }
 
-                        hr = UVAtlasComputeIMTFromTexture(inMesh->GetPositionBuffer(), inMesh->GetTexCoordBuffer(), nVerts,
-                            inMesh->GetIndexBuffer(), DXGI_FORMAT_R32_UINT, nFaces,
-                            reinterpret_cast<const float*>(img->pixels), img->width, img->height,
-                            UVATLAS_IMT_DEFAULT, UVAtlasCallback, IMTData.get());
-                        if (FAILED(hr))
-                        {
-                            IMTData.reset();
-                            wprintf(L"WARNING: Failed to compute IMT from texture (%08X):\n%ls\n", hr, szTexFile);
-                        }
-                    }
-                }
+//                         hr = UVAtlasComputeIMTFromTexture(inMesh->GetPositionBuffer(), inMesh->GetTexCoordBuffer(), nVerts,
+//                             inMesh->GetIndexBuffer(), DXGI_FORMAT_R32_UINT, nFaces,
+//                             reinterpret_cast<const float*>(img->pixels), img->width, img->height,
+//                             UVATLAS_IMT_DEFAULT, UVAtlasCallback, IMTData.get());
+//                         if (FAILED(hr))
+//                         {
+//                             IMTData.reset();
+//                             wprintf(L"WARNING: Failed to compute IMT from texture (%08X):\n%ls\n", hr, szTexFile);
+//                         }
+//                     }
+//                 }
             }
             else
             {
@@ -1145,7 +1054,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 Mesh::Material mtl = {};
 
                 wchar_t matname[32] = {};
-                swprintf_s(matname, L"Chart%02Iu", j + 1);
+                swprintf(matname, 32, L"Chart%02Iu", j + 1);
                 mtl.name = matname;
                 mtl.specularPower = 1.f;
                 mtl.alpha = 1.f;
@@ -1193,50 +1102,51 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
         // Write results
         wprintf(L"\n\t->\n");
 
-        wchar_t outputPath[MAX_PATH] = {};
-        wchar_t outputExt[_MAX_EXT] = {};
+        char outputPath[MAX_PATH] = {};
+        char outputExt[_MAX_EXT] = {};
 
         if (*szOutputFile)
         {
-            wcscpy_s(outputPath, szOutputFile);
+            strcpy(outputPath, szOutputFile);
 
-            _wsplitpath_s(szOutputFile, nullptr, 0, nullptr, 0, nullptr, 0, outputExt, _MAX_EXT);
+            _splitpath_s(szOutputFile, nullptr, 0, nullptr, 0, nullptr, 0, outputExt, _MAX_EXT);
         }
         else
         {
             if (dwOptions & (DWORD64(1) << OPT_VBO))
             {
-                wcscpy_s(outputExt, L".vbo");
+                strcpy(outputExt, ".vbo");
             }
             else if (dwOptions & (DWORD64(1) << OPT_CMO))
             {
-                wcscpy_s(outputExt, L".cmo");
+                strcpy(outputExt, ".cmo");
             }
             else if (dwOptions & (DWORD64(1) << OPT_PLY))
             {
-                wcscpy_s(outputExt, L".ply");
+                strcpy(outputExt, ".ply");
             }
             else
             {
-                wcscpy_s(outputExt, L".sdkmesh");
+                strcpy(outputExt, ".sdkmesh");
             }
 
-            wchar_t outFilename[_MAX_FNAME] = {};
-            wcscpy_s(outFilename, fname);
+            char outFilename[_MAX_FNAME] = {};
+            strcpy(outFilename, fname);
 
-            _wmakepath_s(outputPath, nullptr, nullptr, outFilename, outputExt);
+            _makepath_s(outputPath, nullptr, nullptr, outFilename, outputExt);
         }
 
         if (~dwOptions & (DWORD64(1) << OPT_OVERWRITE))
         {
-            if (GetFileAttributesW(outputPath) != INVALID_FILE_ATTRIBUTES)
+            struct stat buffer;
+            if (stat(outputPath, &buffer) == 0)
             {
-                wprintf(L"\nERROR: Output file already exists, use -y to overwrite:\n'%ls'\n", outputPath);
+                wprintf(L"\nERROR: Output file already exists, use -y to overwrite:\n'%s'\n", outputPath);
                 return 1;
             }
         }
 
-        if (!_wcsicmp(outputExt, L".vbo"))
+        if (!_stricmp(outputExt, ".vbo"))
         {
             if (!inMesh->GetNormalBuffer() || !inMesh->GetTexCoordBuffer())
             {
@@ -1250,17 +1160,15 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 return 1;
             }
 
-            hr = inMesh->ExportToVBO(outputPath);
+            wprintf(L"\nERROR: VBO files not supported\n");
+            return 1;
         }
-        else if (!_wcsicmp(outputExt, L".sdkmesh"))
+        else if (!_stricmp(outputExt, ".sdkmesh"))
         {
-            hr = inMesh->ExportToSDKMESH(
-                outputPath,
-                inMaterial.size(), inMaterial.empty() ? nullptr : inMaterial.data(),
-                (dwOptions & (DWORD64(1) << OPT_FORCE_32BIT_IB)) ? true : false,
-                (dwOptions & (DWORD64(1) << OPT_SDKMESH_V2)) ? true : false);
+            wprintf(L"\nERROR: SDKMESH files not supported\n");
+            return 1;
         }
-        else if (!_wcsicmp(outputExt, L".cmo"))
+        else if (!_stricmp(outputExt, ".cmo"))
         {
             if (!inMesh->GetNormalBuffer() || !inMesh->GetTexCoordBuffer() || !inMesh->GetTangentBuffer())
             {
@@ -1274,30 +1182,31 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 return 1;
             }
 
-            hr = inMesh->ExportToCMO(outputPath, inMaterial.size(), inMaterial.empty() ? nullptr : inMaterial.data());
+            wprintf(L"\nERROR: CMO files not supported\n");
+            return 1;
         }
-        else if (!_wcsicmp(outputExt, L".ply"))
+        else if (!_stricmp(outputExt, ".ply"))
         {
             hr = inMesh->ExportToPLY(outputPath);
         }
-        else if (!_wcsicmp(outputExt, L".x"))
+        else if (!_stricmp(outputExt, ".x"))
         {
             wprintf(L"\nERROR: Legacy Microsoft X files not supported\n");
             return 1;
         }
         else
         {
-            wprintf(L"\nERROR: Unknown output file type '%ls'\n", outputExt);
+            wprintf(L"\nERROR: Unknown output file type '%s'\n", outputExt);
             return 1;
         }
 
         if (FAILED(hr))
         {
-            wprintf(L"\nERROR: Failed write (%08X):-> '%ls'\n", hr, outputPath);
+            wprintf(L"\nERROR: Failed write (%08X):-> '%s'\n", hr, outputPath);
             return 1;
         }
 
-        wprintf(L" %zu vertices, %zu faces written:\n'%ls'\n", nVerts, nFaces, outputPath);
+        wprintf(L" %zu vertices, %zu faces written:\n'%s'\n", nVerts, nFaces, outputPath);
 
         // Write out UV mesh visualization
         if (dwOptions & (DWORD64(1) << OPT_UV_MESH))
@@ -1309,34 +1218,33 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 return 1;
             }
 
-            wchar_t uvFilename[_MAX_FNAME] = {};
-            wcscpy_s(uvFilename, fname);
-            wcscat_s(uvFilename, L"_texture");
+            char uvFilename[_MAX_FNAME] = {};
+            strcpy(uvFilename, fname);
+            strcat(uvFilename, "_texture");
 
-            _wmakepath_s(outputPath, nullptr, nullptr, uvFilename, outputExt);
+            _makepath_s(outputPath, nullptr, nullptr, uvFilename, outputExt);
 
-            if (!_wcsicmp(outputExt, L".vbo"))
+            if (!_stricmp(outputExt, ".vbo"))
             {
-                hr = inMesh->ExportToVBO(outputPath);
+                wprintf(L"\nERROR: VBO files not supported\n");
+                return 1;
             }
-            else if (!_wcsicmp(outputExt, L".sdkmesh"))
+            else if (!_stricmp(outputExt, ".sdkmesh"))
             {
-                hr = inMesh->ExportToSDKMESH(
-                    outputPath,
-                    inMaterial.size(), inMaterial.empty() ? nullptr : inMaterial.data(),
-                    (dwOptions & (DWORD64(1) << OPT_FORCE_32BIT_IB)) ? true : false,
-                    (dwOptions & (DWORD64(1) << OPT_SDKMESH_V2)) ? true : false);
+                wprintf(L"\nERROR: SDKMESH files not supported\n");
+                return 1;
             }
-            else if (!_wcsicmp(outputExt, L".cmo"))
+            else if (!_stricmp(outputExt, ".cmo"))
             {
-                hr = inMesh->ExportToCMO(outputPath, inMaterial.size(), inMaterial.empty() ? nullptr : inMaterial.data());
+                wprintf(L"\nERROR: CMO files not supported\n");
+                return 1;
             }
             if (FAILED(hr))
             {
-                wprintf(L"\nERROR: Failed uv mesh write (%08X):-> '%ls'\n", hr, outputPath);
+                wprintf(L"\nERROR: Failed uv mesh write (%08X):-> '%s'\n", hr, outputPath);
                 return 1;
             }
-            wprintf(L"uv mesh visualization '%ls'\n", outputPath);
+            wprintf(L"uv mesh visualization '%s'\n", outputPath);
         }
     }
 

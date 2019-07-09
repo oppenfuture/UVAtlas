@@ -24,7 +24,8 @@
 #include <codecvt>
 #include <boost/algorithm/string.hpp>
 
-#include <directxcollision.h>
+#include <d3d11_1.h>
+#include <DirectXCollision.h>
 
 #include "Mesh.h"
 
@@ -55,8 +56,6 @@ namespace
 template<class index_t>
 class PlyReader {
 public:
-    typedef index_t index_t;
-
     struct Vertex {
         DirectX::XMFLOAT3 position;
         DirectX::XMFLOAT3 normal;
@@ -65,7 +64,7 @@ public:
 
     PlyReader() noexcept : hasNormals(false), hasTexcoords(false) {}
 
-    HRESULT Load(_In_z_ const wchar_t* szFileName, bool ccw = true) {
+    HRESULT Load(_In_z_ const char* szFileName, bool ccw = true) {
         Clear();
 
         static const size_t MAX_POLY = 64;
@@ -76,8 +75,8 @@ public:
         if (!InFile)
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
 
-        wchar_t fname[_MAX_FNAME] = {};
-        _wsplitpath_s(szFileName, nullptr, 0, nullptr, 0, fname, _MAX_FNAME, nullptr, 0);
+        char fname[_MAX_FNAME] = {};
+        _splitpath_s(szFileName, nullptr, 0, nullptr, 0, fname, _MAX_FNAME, nullptr, 0);
 
         name = fname;
 
@@ -217,7 +216,6 @@ public:
             }
         }
 
-        read_buffer.resize(sizeof(int) * 3);
         for (size_t i_face = 0; i_face < indices.size() / 3; ++i_face) {
             if (is_ascii) {
                 std::getline(InFile, line);
@@ -247,8 +245,8 @@ public:
                 }
 
                 for (size_t i = 0; i < 3; ++i) {
-                    int index = 0;
-                    InFile.read((char*)&index, sizeof(int));
+                    uint32_t index = 0;
+                    InFile.read((char*)&index, sizeof(uint32_t));
                     indices[i_face * 3 + (ccw ? i : 2 - i)] = (index_t)index;
                 }
             }
@@ -321,7 +319,7 @@ public:
     std::vector<uint32_t>   attributes;
     std::vector<Material>   materials;
 
-    std::wstring            name;
+    std::string             name;
     bool                    hasNormals;
     bool                    hasTexcoords;
 
@@ -329,7 +327,7 @@ public:
 };
 
 HRESULT LoadFromPLY(
-    const wchar_t* szFilename,
+    const char* szFilename,
     std::unique_ptr<Mesh>& inMesh,
     std::vector<Mesh::Material>& inMaterial,
     bool ccw,

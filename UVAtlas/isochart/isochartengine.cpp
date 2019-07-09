@@ -8,6 +8,7 @@
 //-------------------------------------------------------------------------------------
 
 #include "pch.h"
+#include <thread>
 #include "isochartengine.h"
 #include "isochart.h"
 #include "isochartmesh.h"
@@ -51,22 +52,19 @@ CIsochartEngine::~CIsochartEngine()
 #if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
         // Busy-wait
 #else
-        SwitchToThread();
+        std::this_thread::yield();
 #endif
     }
     
-    if (m_hMutex)
-    {
-        CloseHandle(m_hMutex);
-    }
+    m_hMutex.reset();
 }
 
 HRESULT CIsochartEngine::CreateEngineMutex()
 {
-    m_hMutex = CreateMutexEx(nullptr, nullptr, CREATE_MUTEX_INITIAL_OWNER, SYNCHRONIZE );
+    m_hMutex = std::make_unique<std::mutex>();
     if (!m_hMutex)
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return E_FAIL;
     }
     return S_OK;
 }
@@ -1680,7 +1678,7 @@ HRESULT CIsochartEngine::FillExportFaceAdjacencyBuffer(
 HRESULT CIsochartEngine::TryEnterExclusiveSection()
 {
     // Other thread is using this object. 
-    if (WaitForSingleObjectEx(m_hMutex, 0, FALSE) == WAIT_OBJECT_0)
+    if (m_hMutex->try_lock())
     {
         return S_OK;
     }
@@ -1694,7 +1692,7 @@ void  CIsochartEngine::LeaveExclusiveSection()
 {
     if (m_hMutex)
     {
-        ReleaseMutex(m_hMutex);
+        m_hMutex->unlock();
     }
 
 }

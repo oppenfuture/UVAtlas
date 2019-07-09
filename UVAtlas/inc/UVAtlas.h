@@ -14,7 +14,7 @@
 #if defined(_XBOX_ONE) && defined(_TITLE)
 #include <d3d11_x.h>
 #else
-#include <windows.h>
+#include <d3d11_1.h>
 #include <dxgiformat.h>
 #endif
 

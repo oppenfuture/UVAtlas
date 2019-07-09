@@ -1623,7 +1623,7 @@ HRESULT CIsochartMesh::ProcessSpecialShape(
     if (m_baseInfo.fExpectAvgL2SquaredStretch >= 
         fSmallStretch && dwBoundaryNumber == 1)
     {
-        return 0;
+        return S_OK;
     }
 #endif
 

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <memory>
+#include <mutex>
 #include "basemeshinfo.h"
 #include "callbackschemer.h"
 #include "maxheap.hpp"
@@ -236,7 +238,7 @@ private:
 
     EngineState m_state;	// Indicate internal state.
     
-    HANDLE m_hMutex;	// Mutex 
+    std::unique_ptr<std::mutex> m_hMutex;	// Mutex 
 
     DWORD m_dwOptions ;
 
