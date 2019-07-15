@@ -51,8 +51,7 @@
 #define NOHELP
 #pragma warning(pop)
 
-#include <windows.h>
-#include <objbase.h>
+#include <d3d11_1.h>
 
 #include <assert.h>
 

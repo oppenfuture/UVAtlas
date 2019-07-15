@@ -10,9 +10,9 @@
 #include "pch.h"
 #include "isochartmesh.h"
 
-#include "geodesics\ExactOneToAll.h"
-#include "geodesics\ApproximateOneToAll.h"
-#include "geodesics\mathutils.h"
+#include "geodesics/ExactOneToAll.h"
+#include "geodesics/ApproximateOneToAll.h"
+#include "geodesics/mathutils.h"
 
 using namespace Isochart;
 using namespace GeodesicDist ;
