@@ -299,7 +299,7 @@ int main(_In_ int argc, _In_z_count_(argc) char* argv[])
     {
         char *pArg = argv[iArg];
 
-        if (('-' == pArg[0]) || ('/' == pArg[0]))
+        if ('-' == pArg[0])
         {
             pArg++;
             char *pValue;
