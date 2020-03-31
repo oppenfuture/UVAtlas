@@ -141,7 +141,7 @@ public:
         }
     };
 
-    HRESULT ExportToPLY(const char* szFileName) const;
+    HRESULT ExportToPLY(const char* szFileName, bool binary = true) const;
 
 private:
     size_t                                      mnFaces;

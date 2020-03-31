@@ -1033,7 +1033,7 @@ HRESULT Mesh::GetVertexBuffer(_Inout_ DirectX::VBWriter& writer) const
 //======================================================================================
 
 _Use_decl_annotations_
-HRESULT Mesh::ExportToPLY(const char* szFileName) const
+HRESULT Mesh::ExportToPLY(const char* szFileName, bool binary) const
 {
     if (!szFileName)
         return E_INVALIDARG;
@@ -1041,13 +1041,17 @@ HRESULT Mesh::ExportToPLY(const char* szFileName) const
     if (!mnFaces || !mIndices || !mnVerts || !mPositions)
         return E_UNEXPECTED;
 
-    std::wofstream out(szFileName);
+    std::ofstream out(szFileName);
     if (!out.good()) {
         return E_FAIL;
     }
 
     out << "ply\n";
-    out << "format ascii 1.0\n";
+    if (binary) {
+      out << "format binary_little_endian 1.0\n";
+    } else {
+      out << "format ascii 1.0\n";
+    }
     out << "element vertex " << mnVerts << "\n";
     out << "property float x\nproperty float y\nproperty float z\n";
     if (mNormals) {
@@ -1060,19 +1064,39 @@ HRESULT Mesh::ExportToPLY(const char* szFileName) const
     out << "property list uchar int vertex_indices\n";
     out << "end_header\n";
 
-    for (size_t i = 0; i < mnVerts; ++i) {
-        out << mPositions[i].x << " " << mPositions[i].y << " " << mPositions[i].z << " ";
-        if (mNormals) {
-            out << mNormals[i].x << " " << mNormals[i].y << " " << mNormals[i].z << " ";
+    if (binary) {
+        for (size_t i = 0; i < mnVerts; ++i) {
+            out.write((char *)&mPositions[i].x, sizeof(float) * 3);
+            if (mNormals) {
+                out.write((char *)&mNormals[i].y, sizeof(float) * 3);
+            }
+            if (mTexCoords) {
+                out.write((char *)&mTexCoords[i].x, sizeof(float) * 2);
+            }
         }
-        if (mTexCoords) {
-            out << mTexCoords[i].x << " " << mTexCoords[i].y;
+        uint8_t face_size = 3;
+        int index;
+        for (size_t i = 0; i < mnFaces; ++i) {
+            out.write((char *)&face_size, 1);
+            for (size_t j = 0; j < 3; ++j) {
+                index = (int)mIndices[3 * i + j];
+                out.write((char *)&index, sizeof(int));
+            }
         }
-        out << "\n";
-    }
-
-    for (size_t i = 0; i < mnFaces; ++i) {
-        out << 3 << " " << mIndices[3 * i] << " " << mIndices[3 * i + 1] << " " << mIndices[3 * i + 2] << "\n";
+    } else {
+        for (size_t i = 0; i < mnVerts; ++i) {
+            out << mPositions[i].x << " " << mPositions[i].y << " " << mPositions[i].z << " ";
+            if (mNormals) {
+                out << mNormals[i].x << " " << mNormals[i].y << " " << mNormals[i].z << " ";
+            }
+            if (mTexCoords) {
+                out << mTexCoords[i].x << " " << mTexCoords[i].y;
+            }
+            out << "\n";
+        }
+        for (size_t i = 0; i < mnFaces; ++i) {
+            out << 3 << " " << mIndices[3 * i] << " " << mIndices[3 * i + 1] << " " << mIndices[3 * i + 2] << "\n";
+        }
     }
 
     return out.good() ? S_OK : E_FAIL;
