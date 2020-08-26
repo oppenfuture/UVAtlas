@@ -1068,7 +1068,7 @@ HRESULT Mesh::ExportToPLY(const char* szFileName, bool binary) const
         for (size_t i = 0; i < mnVerts; ++i) {
             out.write((char *)&mPositions[i].x, sizeof(float) * 3);
             if (mNormals) {
-                out.write((char *)&mNormals[i].y, sizeof(float) * 3);
+                out.write((char *)&mNormals[i].x, sizeof(float) * 3);
             }
             if (mTexCoords) {
                 out.write((char *)&mTexCoords[i].x, sizeof(float) * 2);
