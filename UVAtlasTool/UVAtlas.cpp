@@ -83,6 +83,7 @@ enum OPTIONS
     OPT_FLIPZ,
     OPT_NOLOGO,
     OPT_FILELIST,
+    OPT_REMAP,
     OPT_MAX
 };
 
@@ -159,6 +160,7 @@ const SValue g_pOptions [] =
     { "flipz",     OPT_FLIPZ },
     { "nologo",    OPT_NOLOGO },
     { "flist",     OPT_FILELIST },
+    { "remap",     OPT_REMAP },
     { nullptr,      0 }
 };
 
@@ -246,6 +248,7 @@ namespace
         wprintf(L"   -y                  overwrite existing output file (if any)\n");
         wprintf(L"   -nologo             suppress copyright message\n");
         wprintf(L"   -flist <filename>   use text file with a list of input files (one per line)\n");
+        wprintf(L"   -remap <filename>   output vertex remap file\n");
 
         wprintf(L"\n");
     }
@@ -288,6 +291,7 @@ int main(_In_ int argc, _In_z_count_(argc) char* argv[])
 
     char szTexFile[MAX_PATH] = {};
     char szOutputFile[MAX_PATH] = {};
+    char szRemapFile[MAX_PATH] = {};
 
     HRESULT hr = S_OK;
 
@@ -333,6 +337,7 @@ int main(_In_ int argc, _In_z_count_(argc) char* argv[])
             case OPT_IMT_VERTEX:
             case OPT_OUTPUTFILE:
             case OPT_FILELIST:
+            case OPT_REMAP:
                 if (!*pValue)
                 {
                     if ((iArg + 1 >= argc))
@@ -471,6 +476,10 @@ int main(_In_ int argc, _In_z_count_(argc) char* argv[])
                 strcpy(szOutputFile, pValue);
                 break;
 
+            case OPT_REMAP:
+                strcpy(szRemapFile, pValue);
+                break;
+
             case OPT_TOPOLOGICAL_ADJ:
                 if (dwOptions & (DWORD64(1) << OPT_GEOMETRIC_ADJ))
                 {
@@ -601,6 +610,11 @@ int main(_In_ int argc, _In_z_count_(argc) char* argv[])
     if (*szOutputFile && conversion.size() > 1)
     {
         wprintf(L"Cannot use -o with multiple input files\n");
+        return 1;
+    }
+
+    if (*szRemapFile && conversion.size() > 1) {
+        wprintf(L"Cannot use -remap with multiple input files\n");
         return 1;
     }
 
@@ -993,6 +1007,20 @@ int main(_In_ int argc, _In_z_count_(argc) char* argv[])
         assert((ib.size() / sizeof(uint32_t)) == (nFaces * 3));
         assert(facePartitioning.size() == nFaces);
         assert(vertexRemapArray.size() == vb.size());
+
+        if (*szRemapFile) {
+            std::ofstream fs(szRemapFile, std::ios::out | std::ios::binary);
+            if (!fs.good()) {
+                wprintf(L" Failed opening remap file. ");
+                return 1;
+            }
+            fs.write((char *)vertexRemapArray.data(), vertexRemapArray.size() * sizeof(uint32_t));
+            if (!fs.good()) {
+                wprintf(L" Failed writing remap file. ");
+                return 1;
+            }
+            fs.close();
+        }
 
         hr = inMesh->UpdateFaces(nFaces, reinterpret_cast<const uint32_t*>(ib.data()));
         if (FAILED(hr))
